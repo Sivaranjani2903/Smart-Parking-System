@@ -1,0 +1,85 @@
+#include <ESP8266WiFi.h>
+
+// Wi-Fi credentials
+const char* ssid = "Your_WiFi_SSID";
+const char* password = "Your_WiFi_Password";
+
+// Ultrasonic sensor pins
+#define TRIG_PIN1 2
+#define ECHO_PIN1 3
+#define TRIG_PIN2 4
+#define ECHO_PIN2 5
+
+// API endpoint
+const char* server = "http://your-cloud-platform.com/update"; // Replace with your API endpoint
+
+WiFiClient client;
+
+void setup() {
+  // Set up Serial Monitor
+  Serial.begin(9600);
+
+  // Initialize ultrasonic sensor pins
+  pinMode(TRIG_PIN1, OUTPUT);
+  pinMode(ECHO_PIN1, INPUT);
+  pinMode(TRIG_PIN2, OUTPUT);
+  pinMode(ECHO_PIN2, INPUT);
+
+  // Connect to Wi-Fi
+  Serial.print("Connecting to Wi-Fi...");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nConnected to Wi-Fi");
+}
+
+void loop() {
+  int distance1 = getDistance(TRIG_PIN1, ECHO_PIN1);
+  int distance2 = getDistance(TRIG_PIN2, ECHO_PIN2);
+
+  // Parking slot status
+  bool slot1 = distance1 < 20; // True if slot 1 is occupied
+  bool slot2 = distance2 < 20; // True if slot 2 is occupied
+
+  // Print status to Serial Monitor
+  Serial.print("Slot 1: ");
+  Serial.println(slot1 ? "Occupied" : "Available");
+  Serial.print("Slot 2: ");
+  Serial.println(slot2 ? "Occupied" : "Available");
+
+  // Send data to cloud
+  sendToCloud(slot1, slot2);
+
+  delay(5000); // Wait for 5 seconds
+}
+
+// Function to measure distance using ultrasonic sensor
+int getDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH);
+  int distance = duration * 0.034 / 2; // Convert to cm
+  return distance;
+}
+
+// Function to send data to the cloud
+void sendToCloud(bool slot1, bool slot2) {
+  if (client.connect(server, 80)) {
+    String postData = "slot1=" + String(slot1) + "&slot2=" + String(slot2);
+    client.println("POST /update HTTP/1.1");
+    client.println("Host: your-cloud-platform.com");
+    client.println("Content-Type: application/x-www-form-urlencoded");
+    client.println("Content-Length: " + String(postData.length()));
+    client.println();
+    client.println(postData);
+    client.stop();
+  } else {
+    Serial.println("Failed to connect to the server");
+  }
+}
